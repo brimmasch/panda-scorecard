@@ -114,6 +114,45 @@
     --sidebar-ring: oklch(0.551 0.027 264.364);
 }
 
+@keyframes rainbow-shift {
+  0%   { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes rainbow-shift-left {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 100% 50%; }
+}
+
+@keyframes saturate-pulse {
+  0%, 100% { filter: saturate(1); }
+  50%       { filter: saturate(2.5); }
+}
+
+.rainbow-row,
+.rainbow-row-fast {
+  background: linear-gradient(
+    to right,
+    #ffd6d6, #ffddb3, #ffffb3, #d6ffd6, #b3d9ff, #d9b3ff,
+    #ffd6d6, #ffddb3, #ffffb3, #d6ffd6, #b3d9ff, #d9b3ff,
+    #ffd6d6
+  );
+  background-size: 200% 100%;
+}
+
+.rainbow-row {
+  animation: rainbow-shift 8s linear infinite;
+}
+
+.rainbow-row-fast {
+  animation: rainbow-shift-left 2s linear infinite, saturate-pulse 1s ease-in-out infinite;
+}
+
+.rainbow-row td,
+.rainbow-row-fast td {
+  background: transparent !important;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

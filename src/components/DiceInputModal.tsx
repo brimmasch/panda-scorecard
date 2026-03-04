@@ -1,5 +1,23 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { CellData, DiceColor } from '../types';
+
+const DICE_RANGES: Record<DiceColor, { min: number; max: number }> = {
+  yellow: { min: 1, max: 8 },
+  purple: { min: 1, max: 12 },
+  blue:   { min: 1, max: 12 },
+  red:    { min: -8, max: 8 },
+  green:  { min: 1, max: 20 },
+  clear:  { min: 1, max: 6 },
+  pink:   { min: 1, max: 90 },
+};
+
+function isValidDieValue(color: DiceColor, raw: string): boolean {
+  if (raw === '' || raw === '-') return true; // still typing
+  const n = Number(raw);
+  if (!Number.isInteger(n)) return false;
+  const { min, max } = DICE_RANGES[color];
+  return n >= min && n <= max;
+}
 
 interface ColumnConfig {
   key: DiceColor;
@@ -17,17 +35,50 @@ interface Props {
   columnConfig: ColumnConfig;
   onSave: (data: CellData | null) => void;
   onClose: () => void;
+  onSwipe?: (direction: 'left' | 'right', data: CellData | null) => void;
 }
 
-export function DiceInputModal({ roundIndex, existing, defaultDiceCount, defaultGlitter, columnConfig, onSave, onClose }: Props) {
+export function DiceInputModal({ roundIndex, existing, defaultDiceCount, defaultGlitter, columnConfig, onSave, onClose, onSwipe }: Props) {
   const [values, setValues] = useState<string[]>(
-    existing?.values.map(String) ?? Array(defaultDiceCount).fill('')
+    existing?.values.length
+      ? [...existing.values.map(String), '']
+      : Array(defaultDiceCount).fill('')
   );
   const [glitter, setGlitter] = useState(existing?.glitter ?? defaultGlitter);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const prevLength = useRef(values.length);
+  const touchStartX = useRef<number | null>(null);
+  const handleSaveRef = useRef(handleSave);
+  useEffect(() => { handleSaveRef.current = handleSave; });
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  // Android back button → treat as Save
+  useEffect(() => {
+    history.pushState({ modal: true }, '');
+    const handler = () => handleSaveRef.current();
+    window.addEventListener('popstate', handler);
+    return () => window.removeEventListener('popstate', handler);
+  }, []);
+
+  useEffect(() => {
+    if (values.length > prevLength.current) {
+      inputRefs.current[values.length - 1]?.focus();
+    }
+    prevLength.current = values.length;
+  }, [values.length]);
 
   const parsedValues = values
     .map((v) => parseFloat(v))
     .filter((v) => !isNaN(v) && (columnConfig.key === 'red' || v > 0));
+
+  const hasInvalidValue = values.some(
+    (v) => v !== '' && !isValidDieValue(columnConfig.key, v)
+  );
 
   const previewData: CellData = { values: parsedValues, glitter };
   const previewScore = parsedValues.length > 0 ? columnConfig.score(previewData) : null;
@@ -48,21 +99,33 @@ export function DiceInputModal({ roundIndex, existing, defaultDiceCount, default
     });
   }
 
+  function currentData(): CellData | null {
+    if (parsedValues.length === 0) return null;
+    return { values: parsedValues, glitter: columnConfig.key === 'blue' ? glitter : undefined };
+  }
+
   function handleSave() {
-    if (parsedValues.length === 0) {
-      onSave(null);
-    } else {
-      onSave({
-        values: parsedValues,
-        glitter: columnConfig.key === 'blue' ? glitter : undefined,
-      });
-    }
+    onSave(currentData());
+  }
+
+  function handleTouchStart(e: React.TouchEvent) {
+    touchStartX.current = e.touches[0].clientX;
+  }
+
+  function handleTouchEnd(e: React.TouchEvent) {
+    if (touchStartX.current === null) return;
+    const delta = e.changedTouches[0].clientX - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(delta) < 50) return;
+    onSwipe?.(delta < 0 ? 'left' : 'right', currentData());
   }
 
   return (
     <div
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
       onClick={(e) => e.target === e.currentTarget && handleSave()}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
     >
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm">
         {/* Header */}
@@ -81,13 +144,29 @@ export function DiceInputModal({ roundIndex, existing, defaultDiceCount, default
               <div key={i} className="flex items-center gap-2">
                 <span className="text-sm text-gray-500 w-14 shrink-0">Die {i + 1}:</span>
                 <input
+                  ref={(el) => { inputRefs.current[i] = el; }}
                   type="number"
                   min={columnConfig.key === 'red' ? undefined : 1}
                   value={val}
                   onChange={(e) => updateDie(i, e.target.value)}
-                  className="border border-gray-300 rounded-md px-3 py-1.5 w-24 text-center focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                  onKeyDown={(e) => {
+                    if (e.key === '.' || e.key === ',') { e.preventDefault(); return; }
+                    if (e.key === 'Enter' || e.key === 'Tab') {
+                      e.preventDefault();
+                      if (i < values.length - 1) {
+                        inputRefs.current[i + 1]?.focus();
+                      } else {
+                        addDie();
+                      }
+                    }
+                  }}
+                  className={`border rounded-md px-3 py-1.5 w-24 text-center focus:outline-none focus:ring-2 focus:border-transparent ${
+                    !isValidDieValue(columnConfig.key, val)
+                      ? 'border-red-400 focus:ring-red-400 bg-red-50'
+                      : 'border-gray-300 focus:ring-blue-400'
+                  }`}
                   placeholder="—"
-                  autoFocus={i === 0 && !existing}
+                  autoFocus={i === values.length - 1 && !!existing || i === 0 && !existing}
                 />
                 {values.length > 1 && (
                   <button
@@ -146,12 +225,21 @@ export function DiceInputModal({ roundIndex, existing, defaultDiceCount, default
               </button>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            Cancel
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={hasInvalidValue}
+              className="px-4 py-2 text-sm bg-slate-800 text-white font-semibold rounded-lg hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Save
+            </button>
+          </div>
         </div>
       </div>
     </div>
