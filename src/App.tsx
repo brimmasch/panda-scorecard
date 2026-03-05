@@ -7,7 +7,7 @@ import type { CellData, DiceColor, RoundData } from './types';
 
 const COLOR_NAMES: Record<string, DiceColor> = {
   yellow: 'yellow', purple: 'purple', blue: 'blue', red: 'red',
-  green: 'green', clear: 'clear', pink: 'pink',
+  green: 'green', clear: 'clear', pink: 'pink', black: 'black',
 };
 
 const WORD_NUMBERS: Record<string, number> = {
@@ -143,7 +143,7 @@ const COLUMNS: Array<{
       rule: 'Sum of Red × # of Red',
       headerBg: 'bg-red-300',
       cellBg: 'hover:bg-red-50',
-      score: (c) => sum(c.values) * c.values.length,
+      score: (c) => sum(c.values) * c.values.filter((_, i) => !c.mimic?.[i]).length,
     },
     {
       key: 'green',
@@ -173,6 +173,17 @@ const COLUMNS: Array<{
       score: (c) => sum(c.values),
     },
   ];
+
+// Expansion-only column — does not appear in COLUMNS, not scored in totals
+const BLACK_COLUMN = {
+  key: 'black' as const,
+  label: 'Black',
+  shortLabel: 'Bk',
+  rule: 'Number of Rerolls',
+  headerBg: 'bg-slate-800',
+  cellBg: 'hover:bg-slate-100',
+  score: (c: import('./types').CellData) => sum(c.values),
+};
 
 type GameRecord = {
   id: string;
@@ -226,11 +237,11 @@ function commitToHistory(
 
 const STORAGE_KEY = 'panda-royale';
 
-// Load rounds, history, and currentId from localStorage on startup
-function loadState(): { rounds: RoundData[]; history: GameRecord[]; currentId: string | null } {
+// Load rounds, history, currentId, and expansion from localStorage on startup
+function loadState(): { rounds: RoundData[]; history: GameRecord[]; currentId: string | null; expansion: boolean } {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { rounds: emptyRounds(), history: [], currentId: null };
+    if (!raw) return { rounds: emptyRounds(), history: [], currentId: null, expansion: false };
     const parsed = JSON.parse(raw);
     return {
       rounds: parsed.rounds ?? emptyRounds(),
@@ -239,9 +250,10 @@ function loadState(): { rounds: RoundData[]; history: GameRecord[]; currentId: s
         timestamp: new Date(e.timestamp),
       })),
       currentId: parsed.currentId ?? null,
+      expansion: parsed.expansion ?? false,
     };
   } catch {
-    return { rounds: emptyRounds(), history: [], currentId: null };
+    return { rounds: emptyRounds(), history: [], currentId: null, expansion: false };
   }
 }
 
@@ -254,10 +266,11 @@ export default function App() {
   const [listening, setListening] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState('');
   const [confirmClearRound, setConfirmClearRound] = useState<number | null>(null);
+  const [expansion, setExpansion] = useState(saved.expansion);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ rounds, history, currentId }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ rounds, history, currentId, expansion }));
   }, [rounds, history, currentId]);
 
   function handleSave(roundIndex: number, color: DiceColor, data: CellData | null) {
@@ -289,10 +302,12 @@ export default function App() {
       next[editing.roundIndex] = round;
       return next;
     });
-    const currentIndex = COLUMNS.findIndex((c) => c.key === editing.color);
+    // Build the ordered list of navigable columns (black appended when expansion is on)
+    const navCols = expansion ? [...COLUMNS, BLACK_COLUMN] : COLUMNS;
+    const currentIndex = navCols.findIndex((c) => c.key === editing.color);
     const step = direction === 'left' ? 1 : -1;
-    for (let i = currentIndex + step; i >= 0 && i < COLUMNS.length; i += step) {
-      const col = COLUMNS[i];
+    for (let i = currentIndex + step; i >= 0 && i < navCols.length; i += step) {
+      const col = navCols[i];
       if (editing.roundIndex === 0 && col.key !== 'yellow') continue;
       setEditing({ roundIndex: editing.roundIndex, color: col.key });
       return;
@@ -373,6 +388,11 @@ export default function App() {
           if (targetIndex === 0 && colorKey !== 'yellow') continue;
           round[colorKey] = { values };
         }
+        // Carry over black dice from previous round if expansion is on and user didn't say black
+        if (expansion && !parsed['black'] && targetIndex > 0) {
+          const prevBlack = prev[targetIndex - 1]['black'];
+          if (prevBlack) round['black'] = prevBlack;
+        }
         next[targetIndex] = round;
         return next;
       });
@@ -408,6 +428,22 @@ export default function App() {
     return 1;
   }
 
+  function getPreviousRedMimic(roundIndex: number): boolean[] | undefined {
+    for (let i = roundIndex - 1; i >= 0; i--) {
+      const cell = rounds[i]['red'];
+      if (cell && cell.mimic) return cell.mimic;
+    }
+    return undefined;
+  }
+
+  function getPreviousBlack(roundIndex: number): import('./types').CellData | null {
+    for (let i = roundIndex - 1; i >= 0; i--) {
+      const cell = rounds[i]['black'];
+      if (cell && cell.values.length > 0) return cell;
+    }
+    return null;
+  }
+
   function getDefaultGlitter(roundIndex: number): boolean {
     for (let i = roundIndex - 1; i >= 0; i--) {
       const cell = rounds[i]['blue'];
@@ -417,14 +453,27 @@ export default function App() {
   }
 
   const grandTotal = calcGrandTotal(rounds);
-  const editingColumn = editing ? COLUMNS.find((c) => c.key === editing.color)! : null;
+  const editingColumn = editing
+    ? (editing.color === 'black' ? BLACK_COLUMN : COLUMNS.find((c) => c.key === editing.color)!)
+    : null;
 
   return (
     <div className="min-h-screen bg-slate-100 p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
         {/* Title */}
         <div className="flex items-center justify-between mb-6">
-          <div className="flex-1" />
+          <div className="flex-1 flex justify-start">
+            <button
+              onClick={() => setExpansion((e) => !e)}
+              className={`px-4 py-2 text-sm font-semibold rounded-lg border-2 border-slate-800 transition-colors ${
+                expansion
+                  ? 'bg-slate-800 text-white hover:bg-slate-700'
+                  : 'bg-white text-slate-800 hover:bg-slate-50'
+              }`}
+            >
+              Expansion
+            </button>
+          </div>
           <h1 className="text-4xl font-black tracking-widest uppercase text-slate-800 text-center flex-1 sm:whitespace-nowrap">
             🐼 Panda Royale
           </h1>
@@ -460,6 +509,17 @@ export default function App() {
                     </div>
                   </th>
                 ))}
+                {expansion && (
+                  <th className="border border-slate-200 px-1 sm:px-2 py-2 bg-slate-800 text-center">
+                    <div className="font-bold text-white">
+                      <span className="sm:hidden">Bk</span>
+                      <span className="hidden sm:inline">Black</span>
+                    </div>
+                    <div className="hidden sm:block text-xs font-normal text-slate-300 mt-0.5 leading-tight">
+                      Number of Rerolls
+                    </div>
+                  </th>
+                )}
                 <th className="border border-slate-200 px-1 py-3 bg-slate-200 text-slate-700 text-center font-semibold w-16">
                   =
                 </th>
@@ -469,7 +529,8 @@ export default function App() {
               {rounds.map((round, roundIndex) => {
                 const rowTotal = calcRowTotal(round);
                 const hasAnyEntry = COLUMNS.some((col) => round[col.key] !== undefined);
-                const totalDice = COLUMNS.reduce((n, col) => n + (round[col.key]?.values.length ?? 0), 0);
+                const totalDice = COLUMNS.reduce((n, col) => n + (round[col.key]?.values.length ?? 0), 0)
+                  + (expansion ? (round['black']?.values.length ?? 0) : 0);
                 const pinkDiceCount = round['pink']?.values.length ?? 0;
                 // Dice count rules: round 1 = exactly n, rounds 2-5 = n or n+1, rounds 6-10 = n, n+1, or n+2
                 // Bonus dice (n+1 or n+2) require matching pink dice count
@@ -518,6 +579,28 @@ export default function App() {
                         </td>
                       );
                     })}
+                    {expansion && (() => {
+                      const blackDisabled = roundIndex === 0;
+                      return (
+                        <td
+                          className={`border border-slate-200 px-1 sm:px-2 py-2.5 text-center transition-colors ${
+                            blackDisabled
+                              ? `${invalid ? 'bg-pink-100' : 'bg-slate-100'} cursor-not-allowed`
+                              : `cursor-pointer ${invalid ? 'bg-pink-50 hover:bg-pink-100' : 'hover:bg-slate-100 bg-slate-50'}`
+                          }`}
+                          onClick={blackDisabled ? undefined : () => setEditing({ roundIndex, color: 'black' })}
+                          title={blackDisabled ? 'Not available in Round 1' : `Round ${roundIndex + 1} — Black`}
+                        >
+                          {blackDisabled ? (
+                            <span className="text-slate-300 text-xs select-none">✕</span>
+                          ) : round['black'] ? (
+                            <span className="font-semibold text-slate-800">{sum(round['black'].values)}</span>
+                          ) : (
+                            <span className="text-slate-300 text-xs select-none">—</span>
+                          )}
+                        </td>
+                      );
+                    })()}
                     <td className={`border border-slate-200 px-1 py-2.5 text-center font-bold w-16 ${invalid ? 'bg-pink-50' : 'bg-slate-50'}`}>
                       {invalid ? (
                         <span className="text-xs font-bold text-red-500 bg-red-100 px-1.5 py-0.5 rounded whitespace-nowrap">
@@ -536,7 +619,7 @@ export default function App() {
               {/* Grand total row */}
               <tr className="bg-slate-100 border-t-2 border-slate-300">
                 <td
-                  colSpan={COLUMNS.length + 1}
+                  colSpan={COLUMNS.length + 1 + (expansion ? 1 : 0)}
                   className="border border-slate-200 px-4 py-3 font-bold text-slate-600 uppercase tracking-wide text-sm"
                 >
                   <div className="flex items-center gap-3">
@@ -670,10 +753,12 @@ export default function App() {
         <DiceInputModal
           key={`${editing.roundIndex}-${editing.color}`}
           roundIndex={editing.roundIndex}
-          existing={rounds[editing.roundIndex][editing.color] ?? null}
+          existing={rounds[editing.roundIndex][editing.color] ?? (editing.color === 'black' ? getPreviousBlack(editing.roundIndex) : null)}
           defaultDiceCount={getDefaultDiceCount(editing.roundIndex, editing.color)}
           defaultGlitter={getDefaultGlitter(editing.roundIndex)}
+          defaultMimic={editing.color === 'red' ? getPreviousRedMimic(editing.roundIndex) : undefined}
           columnConfig={editingColumn}
+          expansion={expansion}
           onSave={(data) => handleSave(editing.roundIndex, editing.color, data)}
           onClose={() => setEditing(null)}
           onSwipe={handleSwipeNavigate}
