@@ -7,3 +7,9 @@ export interface CellData {
 }
 
 export type RoundData = Partial<Record<DiceColor, CellData>>;
+
+export type GameRecord = {
+  id: string;
+  timestamp: Date;
+  rounds: RoundData[];
+};
