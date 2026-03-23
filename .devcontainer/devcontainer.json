@@ -1,10 +1,11 @@
 {
 	"name": "panda-scorecard",
 	"image": "mcr.microsoft.com/devcontainers/javascript-node:4-22-trixie",
-	"features": {
-		"ghcr.io/devcontainers/features/docker-in-docker:2": {}
-	},
-	"forwardPorts": [80, 5173, 4173],
+	"mounts": [
+		"source=panda-scorecard-node_modules,target=${containerWorkspaceFolder}/node_modules,type=volume"
+	],
+	"postCreateCommand": "sudo chown -R node:node /workspaces/panda-scorecard/node_modules && npm install",
+	"forwardPorts": [5173],
 	"customizations": {
 		"vscode": {
 			"extensions": [
