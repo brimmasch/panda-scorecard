@@ -129,6 +129,37 @@
   50%       { filter: saturate(2.5); }
 }
 
+@keyframes electric-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 4px 1px #b3d9ff,
+      0 0 10px 2px #d9b3ff,
+      0 0 20px 4px #b3d9ff,
+      inset 0 0 6px 1px #d9b3ff44;
+  }
+  25% {
+    box-shadow:
+      0 0 6px 2px #ffd6d6,
+      0 0 14px 3px #ffddb3,
+      0 0 24px 6px #ffd6d655,
+      inset 0 0 8px 2px #ffddb344;
+  }
+  50% {
+    box-shadow:
+      0 0 5px 1px #d9b3ff,
+      0 0 12px 3px #b3d9ff,
+      0 0 22px 5px #d9b3ff55,
+      inset 0 0 7px 1px #b3d9ff44;
+  }
+  75% {
+    box-shadow:
+      0 0 6px 2px #ffffb3,
+      0 0 14px 3px #d6ffd6,
+      0 0 24px 6px #ffffb355,
+      inset 0 0 8px 2px #d6ffd644;
+  }
+}
+
 .rainbow-row,
 .rainbow-row-fast {
   background: linear-gradient(
@@ -145,7 +176,11 @@
 }
 
 .rainbow-row-fast {
-  animation: rainbow-shift-left 2s linear infinite, saturate-pulse 1s ease-in-out infinite;
+  animation: rainbow-shift-left 2s linear infinite, saturate-pulse 1s ease-in-out infinite, electric-glow 1.5s ease-in-out infinite;
+  outline: 1px solid rgba(180, 180, 255, 0.6);
+  outline-offset: -1px;
+  position: relative;
+  z-index: 1;
 }
 
 .rainbow-row td,
