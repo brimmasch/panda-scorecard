@@ -17,9 +17,9 @@ function getPinkMax(expansion: boolean, roundIndex: number): number {
   return expansion && roundIndex >= 5 ? 102 : 12;
 }
 
-// Pink min: 0 for rounds 6–10, otherwise 1
-function getPinkMin(roundIndex: number): number {
-  return roundIndex >= 5 ? 0 : 1;
+// Pink min: 0 for rounds 6–10 in expansion mode, otherwise 1
+function getPinkMin(expansion: boolean, roundIndex: number): number {
+  return expansion && roundIndex >= 5 ? 0 : 1;
 }
 
 function isValidDieValue(color: DiceColor, raw: string, expansion: boolean, roundIndex: number): boolean {
@@ -29,7 +29,7 @@ function isValidDieValue(color: DiceColor, raw: string, expansion: boolean, roun
   const range = { ...DICE_RANGES[color] };
   if (color === 'pink') {
     range.max = getPinkMax(expansion, roundIndex);
-    range.min = getPinkMin(roundIndex);
+    range.min = getPinkMin(expansion, roundIndex);
   }
   return n >= range.min && n <= range.max;
 }
@@ -98,7 +98,7 @@ export function DiceInputModal({ roundIndex, existing, defaultDiceCount, default
 
   const parsedEntries = values
     .map((v, i) => ({ v: parseFloat(v), m: mimic[i] ?? false }))
-    .filter(({ v }) => !isNaN(v) && (columnConfig.key === 'red' || v > 0 || (columnConfig.key === 'pink' && getPinkMin(roundIndex) === 0 && v === 0)));
+    .filter(({ v }) => !isNaN(v) && (columnConfig.key === 'red' || v > 0 || (columnConfig.key === 'pink' && getPinkMin(expansion, roundIndex) === 0 && v === 0)));
   const parsedValues = parsedEntries.map(({ v }) => v);
   const parsedMimic = parsedEntries.map(({ m }) => m);
 

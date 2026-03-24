@@ -165,10 +165,10 @@ export default function App() {
                 const totalDice = COLUMNS.reduce((n, col) => n + (round[col.key]?.values.length ?? 0), 0)
                   + (expansion ? (round['black']?.values.length ?? 0) : 0);
                 const pinkDiceCount = round['pink']?.values.length ?? 0;
-                // Dice count rules: round 1 = exactly n, rounds 2-5 = n or n+1, rounds 6-10 = n, n+1, or n+2
+                // Dice count rules: round 1 = exactly n, rounds 2-10 = n or n+1, rounds 6-10 (expansion only) = n, n+1, or n+2
                 // Bonus dice (n+1 or n+2) require matching pink dice count
                 const expectedDice = roundIndex + 1;
-                const maxDice = roundIndex >= 5 ? expectedDice + 2 : roundIndex >= 1 ? expectedDice + 1 : expectedDice;
+                const maxDice = expansion && roundIndex >= 5 ? expectedDice + 2 : roundIndex >= 1 ? expectedDice + 1 : expectedDice;
                 const diceCountOk = hasAnyEntry && totalDice >= expectedDice && totalDice <= maxDice;
                 const bonusDice = diceCountOk ? totalDice - expectedDice : 0;
                 const pinkOk = bonusDice === 0 || pinkDiceCount === bonusDice;
