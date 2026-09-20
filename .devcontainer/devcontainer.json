@@ -1,6 +1,9 @@
 {
 	"name": "panda-scorecard",
 	"image": "mcr.microsoft.com/devcontainers/javascript-node:4-22-trixie",
+	"features": {
+		"ghcr.io/devcontainers/features/github-cli:1": {}
+	},
 	"mounts": [
 		"source=panda-scorecard-node_modules,target=${containerWorkspaceFolder}/node_modules,type=volume"
 	],
