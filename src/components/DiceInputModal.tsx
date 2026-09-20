@@ -9,7 +9,8 @@ const DICE_RANGES: Record<DiceColor, { min: number; max: number }> = {
   green:  { min: 1, max: 20 },
   clear:  { min: 1, max: 6 },
   pink:   { min: 1, max: 12 },
-  black:  { min: 1, max: 6 },
+  // 0 is legal: a spent black die is still recorded so the dice count stays right.
+  black:  { min: 0, max: 6 },
 };
 
 // Pink max: 102 in expansion mode for rounds 6–10, otherwise 12
@@ -22,18 +23,26 @@ function getPinkMin(expansion: boolean, roundIndex: number): number {
   return expansion && roundIndex >= 5 ? 0 : 1;
 }
 
-function isValidDieValue(color: DiceColor, raw: string, expansion: boolean, roundIndex: number): boolean {
-  if (raw === '' || raw === '-') return true; // still typing
-  const n = Number(raw);
-  if (!Number.isInteger(n)) return false;
-  const range = { ...DICE_RANGES[color] };
+function getRange(color: DiceColor, expansion: boolean, roundIndex: number) {
   if (color === 'pink') {
-    range.max = getPinkMax(expansion, roundIndex);
-    range.min = getPinkMin(expansion, roundIndex);
+    return { min: getPinkMin(expansion, roundIndex), max: getPinkMax(expansion, roundIndex) };
   }
+  return DICE_RANGES[color];
+}
+
+// Could this value actually come up on a die of this color? Single source of
+// truth for both the error border and which values get recorded.
+function isRollable(color: DiceColor, n: number, expansion: boolean, roundIndex: number): boolean {
+  if (!Number.isInteger(n)) return false;
   // Red spans -8..8, but there is no 0 face on a die.
   if (color === 'red' && n === 0) return false;
-  return n >= range.min && n <= range.max;
+  const { min, max } = getRange(color, expansion, roundIndex);
+  return n >= min && n <= max;
+}
+
+function isValidDieValue(color: DiceColor, raw: string, expansion: boolean, roundIndex: number): boolean {
+  if (raw === '' || raw === '-') return true; // still typing
+  return isRollable(color, Number(raw), expansion, roundIndex);
 }
 
 interface ColumnConfig {
@@ -100,7 +109,7 @@ export function DiceInputModal({ roundIndex, existing, defaultDiceCount, default
 
   const parsedEntries = values
     .map((v, i) => ({ v: parseFloat(v), m: mimic[i] ?? false }))
-    .filter(({ v }) => !isNaN(v) && ((columnConfig.key === 'red' && v !== 0) || v > 0 || (columnConfig.key === 'pink' && getPinkMin(expansion, roundIndex) === 0 && v === 0)));
+    .filter(({ v }) => isRollable(columnConfig.key, v, expansion, roundIndex));
   const parsedValues = parsedEntries.map(({ v }) => v);
   const parsedMimic = parsedEntries.map(({ m }) => m);
 
@@ -224,7 +233,7 @@ export function DiceInputModal({ roundIndex, existing, defaultDiceCount, default
                   ref={(el) => { inputRefs.current[i] = el; }}
                   type={columnConfig.key === 'red' ? 'text' : 'number'}
                   inputMode="numeric"
-                  min={columnConfig.key === 'red' ? undefined : 1}
+                  min={getRange(columnConfig.key, expansion, roundIndex).min}
                   value={val}
                   onChange={(e) => updateDie(i, e.target.value)}
                   onKeyDown={(e) => {
