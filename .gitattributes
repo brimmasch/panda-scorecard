@@ -1,0 +1,14 @@
+# Default to CRLF in the working tree (all workstations for this repo are Windows).
+#
+# Note: `eol` only controls what lands on disk at checkout. Git always stores
+# text files as LF in the object database, so the committed blobs are unchanged
+# by this file -- it just stops the Linux devcontainer and Windows git from
+# disagreeing about the working tree.
+* text=auto eol=crlf
+
+# Keep LF for files consumed by Linux tooling. Nothing here needs it today
+# (no shell scripts, and the Dockerfile uses exec-form CMD), but `COPY . .`
+# drops the working tree into a Linux image, so these are cheap guards.
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+docker-compose.yml text eol=lf
