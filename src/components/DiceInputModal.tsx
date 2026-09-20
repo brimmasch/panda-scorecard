@@ -31,6 +31,8 @@ function isValidDieValue(color: DiceColor, raw: string, expansion: boolean, roun
     range.max = getPinkMax(expansion, roundIndex);
     range.min = getPinkMin(expansion, roundIndex);
   }
+  // Red spans -8..8, but there is no 0 face on a die.
+  if (color === 'red' && n === 0) return false;
   return n >= range.min && n <= range.max;
 }
 
@@ -98,7 +100,7 @@ export function DiceInputModal({ roundIndex, existing, defaultDiceCount, default
 
   const parsedEntries = values
     .map((v, i) => ({ v: parseFloat(v), m: mimic[i] ?? false }))
-    .filter(({ v }) => !isNaN(v) && (columnConfig.key === 'red' || v > 0 || (columnConfig.key === 'pink' && getPinkMin(expansion, roundIndex) === 0 && v === 0)));
+    .filter(({ v }) => !isNaN(v) && ((columnConfig.key === 'red' && v !== 0) || v > 0 || (columnConfig.key === 'pink' && getPinkMin(expansion, roundIndex) === 0 && v === 0)));
   const parsedValues = parsedEntries.map(({ v }) => v);
   const parsedMimic = parsedEntries.map(({ m }) => m);
 
