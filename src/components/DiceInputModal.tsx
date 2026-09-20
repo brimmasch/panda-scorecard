@@ -124,6 +124,8 @@ export function DiceInputModal({ roundIndex, existing, defaultDiceCount, default
   }
 
   function updateDie(index: number, val: string) {
+    // Red uses a text input (see below), so the browser no longer filters for us.
+    if (!/^-?\d*$/.test(val)) return;
     setValues((prev) => {
       const next = [...prev];
       next[index] = val;
@@ -190,9 +192,36 @@ export function DiceInputModal({ roundIndex, existing, defaultDiceCount, default
                     <span className="text-xs text-gray-500">Mimic</span>
                   </label>
                 )}
+                {/* Samsung's numeric keypad has no minus key, so supply one.
+                    Prepending to an already-negative value yields '--N', which
+                    updateDie rejects, so a second press is a no-op. */}
+                {columnConfig.key === 'red' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateDie(i, '-' + val);
+                      // After the commit, so el.value is the new string: park the
+                      // caret at the end, or a typed digit lands before the '-'
+                      // and gets rejected as '4-'.
+                      requestAnimationFrame(() => {
+                        const el = inputRefs.current[i];
+                        if (!el) return;
+                        el.focus();
+                        el.setSelectionRange(el.value.length, el.value.length);
+                      });
+                    }}
+                    className="w-7 h-7 shrink-0 rounded-md border border-gray-300 text-gray-600 text-lg leading-none hover:bg-gray-100 active:bg-gray-200"
+                    aria-label="Insert minus sign"
+                  >
+                    −
+                  </button>
+                )}
+                {/* red uses type=text so a bare '-' survives (type=number sanitizes
+                    it to '') and so Samsung exposes a minus key at all */}
                 <input
                   ref={(el) => { inputRefs.current[i] = el; }}
-                  type="number"
+                  type={columnConfig.key === 'red' ? 'text' : 'number'}
+                  inputMode="numeric"
                   min={columnConfig.key === 'red' ? undefined : 1}
                   value={val}
                   onChange={(e) => updateDie(i, e.target.value)}
