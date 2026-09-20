@@ -4,14 +4,26 @@
 	"features": {
 		"ghcr.io/devcontainers/features/github-cli:1": {}
 	},
+	"containerEnv": {
+		// Keeps .claude.json inside ~/.claude so a single volume covers all
+		// Claude Code state (conversations, memory, skills, settings).
+		"CLAUDE_CONFIG_DIR": "/home/node/.claude"
+	},
 	"mounts": [
-		"source=panda-scorecard-node_modules,target=${containerWorkspaceFolder}/node_modules,type=volume"
+		"source=panda-scorecard-node_modules,target=${containerWorkspaceFolder}/node_modules,type=volume",
+		"source=panda-scorecard-claude,target=/home/node/.claude,type=volume",
+		"source=panda-scorecard-gh,target=/home/node/.config/gh,type=volume",
+		"source=panda-scorecard-copilot,target=/home/node/.copilot,type=volume"
 	],
-	"postCreateCommand": "sudo chown -R node:node /workspaces/panda-scorecard/node_modules && npm install",
+	"postCreateCommand": "bash .devcontainer/post-create.sh",
+	// No lifecycle event fires before a rebuild, so refresh the fallback
+	// snapshot on every attach instead.
+	"postAttachCommand": "bash .devcontainer/backup-home.sh || true",
 	"forwardPorts": [5173],
 	"customizations": {
 		"vscode": {
 			"extensions": [
+				"anthropic.claude-code",
 				"dbaeumer.vscode-eslint",
 				"esbenp.prettier-vscode"
 			]

@@ -6,9 +6,8 @@
 # disagreeing about the working tree.
 * text=auto eol=crlf
 
-# Keep LF for files consumed by Linux tooling. Nothing here needs it today
-# (no shell scripts, and the Dockerfile uses exec-form CMD), but `COPY . .`
-# drops the working tree into a Linux image, so these are cheap guards.
+# Keep LF for files consumed by Linux tooling. The .devcontainer/*.sh lifecycle
+# scripts run under bash in the container, where CRLF would break them.
 *.sh            text eol=lf
 Dockerfile      text eol=lf
 docker-compose.yml text eol=lf
