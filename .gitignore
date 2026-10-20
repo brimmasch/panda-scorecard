@@ -25,3 +25,6 @@ dist-ssr
 
 # Devcontainer home-state snapshot (contains credentials)
 .devcontainer/backup/
+
+# Claude Code per-user settings
+.claude/settings.local.json
