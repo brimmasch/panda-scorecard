@@ -26,7 +26,9 @@ fi
 # Build alongside the target so the final move is atomic.
 tmp="$(mktemp "$DEST/.home-state.XXXXXX.tar.gz")"
 trap 'rm -f "$tmp"' EXIT
-tar -czf "$tmp" "${paths[@]}"
+# A live Claude session keeps appending to its transcript, which makes tar exit
+# 1 ("file changed as we read it"). That still yields a usable archive.
+tar --warning=no-file-changed -czf "$tmp" "${paths[@]}" || [ $? -eq 1 ]
 
 # A restore that silently failed would otherwise let an empty snapshot clobber a
 # good one, so never trade transcripts for none.
